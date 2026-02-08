@@ -1,0 +1,11 @@
+DELIMITER $$
+
+CREATE FUNCTION fn_next_click_id()
+    RETURNS VARCHAR(30)
+    DETERMINISTIC
+BEGIN
+    INSERT INTO deeplink_click_id_seq VALUES (NULL);
+    RETURN CONCAT('CLK', LPAD(LAST_INSERT_ID(), 12, '0'));
+END$$
+
+DELIMITER ;

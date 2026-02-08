@@ -1,0 +1,26 @@
+spring:
+  profiles:
+    active: local
+  mvc:
+    view:
+      prefix: /WEB-INF/views/
+      suffix: .jsp
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.OracleDialect
+  datasource:
+    driver-class-name: oracle.jdbc.OracleDriver
+    url: jdbc:oracle:thin:@//localhost:1521/XEPDB1
+    username: deeplink
+    password: deeplink
+
+deeplink:
+  crypto:
+    key: "CHANGE_THIS_32BYTE_KEY__________1234"
+
+logging:
+  config: classpath:logback-spring.xml
+  level:
+    org.hibernate.SQL: info
+    org.hibernate.type.descriptor.sql: trace

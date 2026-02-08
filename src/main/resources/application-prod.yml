@@ -1,0 +1,33 @@
+spring:
+  profiles:
+    active: prod
+  mvc:
+    view:
+      prefix: /WEB-INF/views/
+      suffix: .jsp
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.OracleDialect
+        format_sql: false
+  datasource:
+    driver-class-name: oracle.jdbc.OracleDriver
+    url: jdbc:oracle:thin:@//<PROD_DB_HOST>:1521/<PROD_SERVICE_NAME>
+    username: <PROD_DB_USER>
+    password: <PROD_DB_PASSWORD>
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      validation-timeout: 5000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+deeplink:
+  crypto:
+    key: ${DEEPLINK_CRYPTO_KEY}
+
+logging:
+  config: classpath:logback-spring.xml
+  level:
+    org.hibernate.SQL: warn
