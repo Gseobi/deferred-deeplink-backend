@@ -1,7 +1,7 @@
 # deferred-deeplink-backend
 
 Spring Boot + JPA + Querydsl을 활용하여  
-**지연 딥링크(Deferred Deep Link) 백엔드 처리 흐름**를 구현한 포트폴리오 프로젝트입니다.
+**지연 딥링크(Deferred Deep Link) 백엔드 처리 흐름**을 구현한 포트폴리오 프로젝트입니다.
 
 앱 미설치 상태에서 광고 링크를 클릭한 사용자를 대상으로  
 설치 → 최초 실행까지의 흐름을 서버 기준으로 추적·검증하는 구조를 설계했습니다.
@@ -11,17 +11,116 @@ Spring Boot + JPA + Querydsl을 활용하여
 
 ---
 
-## 프로젝트 목적
-- 지연 딥링크(Deferred Deep Link) 서버 처리 구조 설계
-- DB Function 기반 Click ID 발급 패턴 정리
-- 서버 주도(Server-driven) 상태 관리 흐름 구현
-- JPA + Querydsl 기반 조회/검증 로직 구성
-- app_type(PathVariable)를 활용한 다중 앱 광고 분기 처리
-- Local / Prod 환경 분리 및 로깅 전략 구성
+## 1. Project Overview
+
+이 프로젝트는 광고 링크 클릭 이후  
+앱이 설치되지 않은 사용자에 대해 설치 및 최초 실행까지의 흐름을  
+서버 기준으로 추적·검증하는 deferred deeplink 백엔드 구조를 재구성한 포트폴리오 프로젝트입니다.
+
+핵심 목적은 단순히 딥링크 URL을 만드는 것이 아니라,  
+광고 유입 → 설치 유도 → 최초 실행 검증까지의 상태를  
+서버가 일관되게 관리할 수 있도록 하는 것입니다.
+
+본 프로젝트는 다음과 같은 요소를 중심으로 구성했습니다.
+
+- DB Function 기반 Click ID 발급
+- 암호화된 crypt 토큰 생성
+- access sequence 기반 접근 이력 관리
+- app_type 기반 다중 앱 분기
+- OS 기반 접근 제어
+- JPA / Querydsl 기반 조회 및 검증 구조 분리
 
 ---
 
-## 패키지 구조
+## 2. Why This Project
+
+deferred deeplink는 앱이 이미 설치된 사용자를 대상으로 한 일반 딥링크와 달리,  
+앱이 없는 상태에서 광고를 클릭한 사용자의 설치 이후 흐름까지 연결해야 합니다.
+
+이 과정에서는 다음과 같은 문제가 중요합니다.
+
+- 광고 클릭 시점 식별자 발급
+- 설치 전 상태 보존
+- 최초 실행 시 위변조 방지
+- 다중 앱 또는 다중 광고 경로 분기
+- 접근 로그 및 운영 추적 가능성
+
+이 프로젝트는 이러한 문제를  
+외부 SDK 의존 없이 서버 중심으로 처리하는 구조를 목표로 했습니다.
+
+---
+
+## 3. Key Design Points
+
+### Deferred Deeplink Server Flow
+- 광고 링크 클릭 시 서버에서 Click ID 발급
+- 암호화된 crypt 토큰 생성
+- 앱 설치 이후 최초 실행 시 crypt + access_seq 검증을 통해 유입 사용자 식별
+
+### DB Function-based Click ID Generation
+- Click ID는 애플리케이션이 아닌 DB Function에서 발급
+- 동시성 환경에서의 중복 ID 발생 가능성 완화
+- PostgreSQL / MySQL / Oracle 예제 포함
+
+### app_type-based Multi-app Routing
+- `/install/{app_type}` 구조를 통해 광고 대상 앱 식별
+- app_type 기준으로 스토어 URL, 앱 스킴, 랜딩 정보 분기
+- 하나의 백엔드에서 다수 앱 광고 유입 처리 가능
+
+### OS-based Access Control
+- User-Agent 기반 OS 판별
+- Windows / Mac 접근 시 invalidRequest 페이지 반환
+- 모바일(Android / iOS) 환경에 한해 deferred deeplink 처리 허용
+
+### JPA + Querydsl Responsibility Split
+- 저장 로직은 Spring Data JPA 담당
+- 조회 및 검증 로직은 Querydsl 전용 QueryRepository로 분리
+- 조회 전용 조건 및 검증 흐름을 별도 계층에 집중
+
+---
+
+## 4. Supported Flow
+
+### 1. 광고 링크 클릭
+- `GET /install/{app_type}`
+- 서버에서 Click ID 발급 및 crypt 생성
+- crypt를 포함한 랜딩 페이지로 Redirect
+
+### 2. 랜딩 페이지 진입
+- `GET /install/landing`
+- crypt 복호화 및 접근 로그(access_seq) 생성
+- 앱 실행 시도 후, 미설치 시 스토어 이동
+
+### 3. 앱 최초 실행 검증
+- `GET /install/check`
+- crypt + access_seq + user_pin 검증
+- deferred deeplink 유입 사용자 확정
+
+---
+
+## 5. Hybrid WebView Integration Context
+
+이 프로젝트는 앱 자체를 개발하는 목적의 프로젝트는 아닙니다.  
+대신 앱 개발자와 협업하면서 하이브리드 WebView 환경에서 사용할  
+JSP 및 JavaScript 기반 페이지를 제작하고,  
+앱-웹 간 호출 및 데이터 전달 흐름을 테스트·운영했던 경험을 반영하고 있습니다.
+
+특히 실제 협업 과정에서는 다음과 같은 점을 함께 고려했습니다.
+
+- WebView 기반 랜딩 페이지 동작
+- JavaScript / Ajax 기반 데이터 전달 및 후속 처리
+- 앱 측 URL interception 흐름과의 연계
+- OS별 WebView 동작 차이에 따른 테스트 및 운영 대응
+
+즉, 이 프로젝트는 Flutter 앱 자체를 구현한 것이 아니라,  
+하이브리드 앱 환경에서 서버와 WebView가 어떻게 연결되고 검증되는지를  
+백엔드 및 웹 페이지 관점에서 정리한 구조입니다.
+
+---
+
+## 6. Package Structure
+
+```text
 com.github.gseobi.deferred.deeplink
 - config
   - QuerydslConfig.java
@@ -57,82 +156,34 @@ com.github.gseobi.deferred.deeplink
   - AES256Cipher.java
   - JsonUtils.java
 - DeferredDeeplinkApplication.java
+```
 
 ---
 
-## 핵심 설계 포인트
-
-### ✔ 지연 딥링크 서버 처리 흐름
-- 광고 링크 클릭 시 서버에서 Click ID 발급
-- 암호화된 crypt 토큰을 생성하여 설치 전 상태 보존
-- 앱 설치 이후 최초 실행 시 crypt + access_seq 검증을 통해
-  지연 딥링크 유입 사용자 식별
-
----
-
-### ✔ DB Function 기반 Click ID 발급
-- Click ID는 애플리케이션에서 생성하지 않고 DB Function에서 발급
-- 동시성 환경에서 중복 ID 발생 방지
-- DB별(PostgreSQL / MySQL / Oracle) Function 예제 제공
+## 7. Tech Stack
+- **Java 17**
+- **Spring Boot 3.x**
+- **Spring Data JPA**
+- **Querydsl**
+- **JSP (Landing / Invalid Page)**
+- **JavaScript / Ajax**
+- **Oracle / PostgreSQL / MySQL (DDL 및 Function 예제 제공)**
+- **Logback (Local / Prod 분리)**
 
 ---
 
-### ✔ app_type(PathVariable) 기반 다중 앱 분기
-- `/install/{app_type}` 구조로 광고 대상 앱 식별
-- app_type을 기준으로 스토어 URL, 앱 스킴, 랜딩 정보 분기
-- 하나의 백엔드에서 다수 앱 광고 유입 처리 가능
+## 8. Future Improvements
+
+- 토큰 만료 및 재사용 방지 정책 보강
+- Click / Access 추적 메트릭 강화
+- 다중 광고 채널 파라미터 추상화
+- error response 및 운영 로그 구조 정리
+- 하이브리드 WebView 연동 흐름 문서화 보강
 
 ---
 
-### ✔ OS 기반 접근 제어
-- User-Agent 기반 OS 판별
-- Windows / Mac 접근 시 invalidRequest 페이지 반환
-- 모바일(Android / IOS) 환경만 지연 딥링크 처리 허용
+## 9. Documents
 
----
-
-### ✔ JPA + Querydsl 조회/검증 구조
-- 저장 로직: Spring Data JPA
-- 조회/검증 로직: Querydsl 전용 QueryRepository 분리
-- 조회 전용 로직을 Impl 레이어에 집중하여 책임 분리
-
----
-
-## 지연 딥링크 처리 흐름
-
-### 1️⃣ 광고 링크 클릭
-- EndPoint : GET /install/{app_type}
-- 서버에서 Click ID 발급 및 crypt 생성
-- crypt를 포함한 랜딩 페이지로 Redirect
-
-### 2️⃣ 랜딩 페이지 진입
-- EndPoint : GET /install/landing
-- crypt 복호화 및 접근 로그(access_seq) 생성
-- 앱 실행 시도 → 미설치 시 스토어 이동
-
-### 3️⃣ 앱 최초 실행 검증
-- EndPoint : GET /install/check
-- crypt + access_seq + user_pin(내부 고객 고유 키 예시 Parameter) 검증
-- 지연 딥링크 유입 사용자 확정
-
----
-
-## 사용 기술
-- Java 17
-- Spring Boot 3.x
-- Spring Data JPA
-- Querydsl
-- JSP (Landing / Invalid Page)
-- Oracle / PostgreSQL / MySQL (DDL 및 Function 예제 제공)
-- Logback (Local / Prod 분리)
-
----
-
-## 정리
-광고 유입부터 앱 설치, 최초 실행까지의 흐름을  
-클라이언트 의존 없이 서버 중심으로 관리하는  
-지연 딥링크 백엔드 구조를 포트폴리오 형태로 정리한 프로젝트입니다.
-
-실제 서비스 환경에서 고려해야 하는  
-동시성, 위변조 방지, 운영 로그, 다중 앱 분기 구조를  
-단순 예제가 아닌 실무 관점에서 설계했습니다.
+- [Design Notes](docs/design-notes.md)
+- [Test Report](docs/test-report.md)
+- [Error Handling Notes](docs/error-handling.md)
