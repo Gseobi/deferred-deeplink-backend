@@ -170,7 +170,28 @@ com.github.gseobi.deferred.deeplink
 
 <br/>
 
-## 8. Future Improvements
+## 8. Automated Test Coverage
+
+이 프로젝트는 설계 문서 정리에 그치지 않고,  
+핵심 deferred deeplink 흐름에 대해 자동화 테스트를 구성했습니다.
+
+주요 테스트 범위는 다음과 같습니다.
+
+- User-Agent 기반 OS 판별 및 클라이언트 IP 추출
+- AES256 기반 `crypt` 암호화 / 복호화
+- install / landing / check 컨트롤러 흐름
+- `crypt` 생성 및 click 저장
+- landing 모델 생성 및 invalid 분기
+- 최초 실행 검증 및 access log 처리
+
+전체 테스트는 로컬 환경에서 `./gradlew clean test` 기준 정상 통과했으며,  
+상세 항목과 실행 결과 스냅샷은 아래 문서에 정리했습니다.
+
+- [Test Report](docs/test-report.md)
+
+<br/>
+
+## 9. Future Improvements
 
 - 토큰 만료 및 재사용 방지 정책 보강
 - Click / Access 추적 메트릭 강화
@@ -181,8 +202,8 @@ com.github.gseobi.deferred.deeplink
 
 <br/>
 
-## 9. Documents
+## 10. Documents
 
+- [Design Notes](docs/design-notes.md)
 - [Test Report](docs/test-report.md)
 - [Troubleshooting Notes](docs/troubleshooting.md)
-- [Design Notes](docs/design-notes.md)

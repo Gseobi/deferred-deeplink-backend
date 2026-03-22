@@ -2,19 +2,20 @@
 
 ## 1. Overview
 
-본 문서는 `deferred-deeplink-backend` 프로젝트에서 검증한 주요 시나리오를 정리한 문서입니다.
+본 문서는 `deferred-deeplink-backend` 프로젝트에서 실제로 구성하고 실행한 자동화 테스트 항목을 정리한 문서입니다.
 
-이 프로젝트는 광고 링크 클릭 이후 앱 설치 및 최초 실행까지의 흐름을
+이 프로젝트는 광고 링크 클릭 이후 앱 설치 및 최초 실행까지의 흐름을  
 서버 기준으로 추적·검증하는 deferred deeplink 구조를 설명하는 데 목적이 있습니다.
 
-검증 목적은 다음과 같습니다.
+자동화 테스트는 다음 관점에 초점을 두고 구성했습니다.
 
-- Click ID 발급과 `crypt` 생성 흐름 확인
-- `app_type` 기준 앱 분기 확인
-- OS 기반 접근 제어 확인
-- 랜딩 페이지 진입 시 `access_seq` 생성 흐름 확인
-- 최초 실행 시 `crypt + access_seq + user_pin` 검증 확인
-- JPA / Querydsl 기반 저장 및 조회 흐름 확인
+- User-Agent 기반 OS 판별
+- 클라이언트 IP 추출
+- AES256 기반 `crypt` 암호화 / 복호화
+- install / landing / check 컨트롤러 흐름
+- `crypt` 생성 및 click 저장
+- landing 모델 생성
+- 최초 실행 검증 처리
 
 <br/>
 
@@ -26,160 +27,147 @@
 - Querydsl
 - JSP
 - JavaScript / Ajax
-- Local Profile
+- JUnit 5
+- Mockito
+- Gradle
 
 <br/>
 
-## 3. Test Scenarios
+## 3. Automated Test Classes
 
-### 3.1 Click ID Generation on Install Entry
-
-**Request**
-- `GET /install/{app_type}`
+### 3.1 ClientUtilsTest
 
 **Purpose**
-- 광고 링크 진입 시 Click ID가 발급되고 `crypt`가 생성되는지 확인
+- User-Agent 기반 OS 판별 및 클라이언트 IP 추출 로직 검증
 
-**Expected**
-- `app_type` 기준 분기 가능
-- Click ID 발급 정상 동작
-- `crypt` 생성 후 랜딩 페이지 흐름으로 연결
+**Covered Cases**
+- Android User-Agent → `ANDROID`
+- iPhone User-Agent → `IOS`
+- Windows User-Agent → `WINDOWS`
+- Mac User-Agent → `MAC`
+- Unknown / null User-Agent → `OTHER`
+- `X-Forwarded-For` 우선 IP 추출
+- fallback `remoteAddr` 사용
+
+**Snapshot**
+![ClientUtilsTest](images/test-deeplink-clientutil.png)
 
 **Result**
-- 정상 동작 확인
+- 8개 테스트 모두 통과
 
 <br/>
 
-### 3.2 app_type-based Routing
-
-**Request**
-- `GET /install/{app_type}` with different `app_type` values
+### 3.2 AES256CipherTest
 
 **Purpose**
-- 서로 다른 `app_type` 값에 따라 앱별 진입 흐름이 올바르게 분기되는지 확인
+- `crypt` 생성 및 복호화에 사용하는 AES256 유틸 로직 검증
 
-**Expected**
-- `app_type` 기준 분기 정상 동작
-- 스토어 URL, 앱 스킴, 랜딩 정보 구분 가능
-- 다중 앱 광고 유입 처리 가능
+**Covered Cases**
+- encode → decode round-trip
+- 32바이트가 아닌 키 사용 시 예외
+- 잘못된 cipher format 복호화 시 예외
+
+**Snapshot**
+![AES256CipherTest](images/test-deeplink-aes256cipher.png)
 
 **Result**
-- 정상 동작 확인
+- 3개 테스트 모두 통과
 
 <br/>
 
-### 3.3 OS-based Access Control
-
-**Request**
-- Mobile / Non-mobile User-Agent requests
+### 3.3 DeepLinkControllerTest
 
 **Purpose**
-- User-Agent 기준으로 모바일 / 비모바일 접근을 구분하고, 모바일 환경만 deferred deeplink 흐름을 허용하는지 확인
+- deferred deeplink 엔드포인트의 요청/응답 흐름 검증
 
-**Expected**
-- Android / iOS 환경은 정상 처리
-- Windows / Mac 접근 시 `invalidRequest` 페이지 반환
+**Covered Cases**
+- 데스크톱 User-Agent 접근 시 `invalidRequest` 페이지 반환
+- 모바일 User-Agent 접근 시 `/install/landing?crypt=...` redirect
+- 빈 `crypt` 반환 시 invalid 페이지 처리
+- landing 요청에서 `invalid=true` 모델 처리
+- landing 요청에서 정상 모델 기반 `landingPage` 렌더링
+- check 요청 JSON 응답 검증
+
+**Snapshot**
+![DeepLinkControllerTest](images/test-deeplink-controller.png)
 
 **Result**
-- 정상 동작 확인
+- 6개 테스트 모두 통과
 
 <br/>
 
-### 3.4 Landing Page Entry and Access Sequence Creation
-
-**Request**
-- `GET /install/landing`
+### 3.4 DeepLinkServiceTest
 
 **Purpose**
-- `crypt` 복호화와 함께 접근 로그 및 `access_seq`가 생성되는지 확인
+- deferred deeplink 핵심 서비스 로직 검증
 
-**Expected**
-- `crypt` 복호화 가능
-- `access_seq` 생성
-- 접근 이력 저장
-- 앱 실행 또는 스토어 이동 흐름 연결
+**Covered Cases**
+- 정상 install 요청 시 `crypt` 생성 및 click 저장
+- landing 모델 생성 성공
+- crypt 복호화 실패 시 invalid 처리
+- payload 필수 값 누락 시 invalid 처리
+- app config 조회 실패 시 invalid 처리
+- 정상 최초 실행 검증 시 VERIFIED 응답 및 access log 저장
+- access log 미존재 시 NOT_MATCHED 응답
+
+**Snapshot**
+![DeepLinkServiceTest](images/test-deeplink-service.png)
 
 **Result**
-- 정상 동작 확인
+- 7개 테스트 모두 통과
 
 <br/>
 
-### 3.5 First Launch Validation
-
-**Request**
-- `GET /install/check`
+### 3.5 DeferredDeeplinkApplicationTests
 
 **Purpose**
-- `crypt + access_seq + user_pin` 조합을 기준으로 최초 실행 검증이 가능한지 확인
+- 기본 테스트 클래스 유지
 
-**Expected**
-- 전달값 검증 정상 수행
-- deferred deeplink 유입 사용자 식별 가능
-- 비정상 요청은 검증 실패 처리
+**Covered Cases**
+- 기본 테스트 클래스 실행 확인
 
 **Result**
-- 정상 동작 확인
+- 1개 테스트 통과
 
 <br/>
 
-### 3.6 JPA and Querydsl Responsibility Split
+## 4. Full Test Summary
 
-**Request / Scope**
-- 저장 로직과 조회·검증 로직 계층 확인
+로컬 환경에서 아래 명령어로 전체 테스트를 실행했습니다.
 
-**Purpose**
-- 저장과 조회·검증 책임이 분리된 구조로 동작하는지 확인
+```bash
+./gradlew clean test
+```
+전체 테스트 결과는 아래와 같습니다.
+- 총 25건 테스트
+- 실패 0건
+- 성공률 100%
 
-**Expected**
-- 저장은 JPA 중심으로 수행
-- 조회/검증은 Querydsl QueryRepository 중심으로 수행
-- 책임 분리 구조 유지
-
-**Result**
-- 정상 동작 확인
-
-<br/>
-
-### 3.7 Hybrid WebView Context Support
-
-**Request / Scope**
-- JSP 기반 랜딩 페이지 및 JavaScript / Ajax 후속 처리 흐름
-
-**Purpose**
-- 하이브리드 WebView 환경과 연계 가능한 구조로 구성되어 있는지 확인
-
-**Expected**
-- 랜딩 페이지 기반 후속 흐름 연결 가능
-- 앱-웹 호출 및 데이터 전달 테스트 가능
-- 서버 검증 흐름과 WebView 페이지 구조가 연결됨
-
-**Result**
-- 정상 동작 확인
+**Snapshot**
+![Test Summary](images/test-summary-report.png)
 
 <br/>
 
-## 4. Verification Summary
+## 5. Verification Summary
 
-본 프로젝트에서는 다음 항목을 확인했습니다.
+본 프로젝트에서 자동화 테스트를 통해 확인한 핵심 항목은 다음과 같습니다.
 
-- Click ID 발급 및 `crypt` 생성 흐름
-- `app_type` 기반 다중 앱 분기
-- OS 기반 접근 제어
-- 랜딩 페이지 진입 및 `access_seq` 생성
-- 최초 실행 검증 흐름
-- JPA / Querydsl 기반 책임 분리
-- 하이브리드 WebView 연계 가능 구조
+- User-Agent 기반 OS 판별
+- 클라이언트 IP 추출
+- AES256 기반 `crypt` 암호화 / 복호화
+- install / landing / check 요청 흐름
+- 광고 클릭 시 `crypt` 생성 및 저장
+- landing 진입 시 모델 구성
+- 최초 실행 시 access log 기반 검증 처리
 
 이를 통해 `deferred-deeplink-backend`는
-단순 딥링크 샘플이 아니라,
+단순 설명형 딥링크 예제가 아니라,
 광고 유입부터 설치 및 최초 실행 검증까지의 흐름을
-서버 기준으로 추적·검증할 수 있는 구조로 동작함을 확인했습니다.
+자동화 테스트로 검증 가능한 구조로 정리한 포트폴리오 프로젝트로 구성되었습니다.
 
 <br/>
 
-## 5. Notes
-
-- 본 프로젝트는 외부 광고 SDK 의존 없이 서버 중심 구조를 기준으로 검증했습니다.
-- 실제 광고 플랫폼 연동 정보나 고객 식별 규칙은 포함하지 않았습니다.
-- 하이브리드 WebView 관련 검증은 앱 구현 자체보다 웹 페이지 및 서버 흐름 연계 관점에 초점을 두었습니다.
-- 본 문서는 상용 환경 전체 재현보다 핵심 흐름 검증에 초점을 둔 포트폴리오용 테스트 리포트입니다.
+## 6. Notes
+- 본 자동화 테스트는 실제 광고 플랫폼 전체를 재현하기보다 핵심 서버 흐름 검증에 초점을 두었습니다.
+- 컨트롤러 테스트는 standalone MockMvc 기반으로 구성하여 웹 요청/응답 흐름을 검증했습니다.
+- 전체 애플리케이션 full-context 테스트보다 핵심 기능 테스트를 우선하는 방향으로 정리했습니다.
