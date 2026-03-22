@@ -43,6 +43,7 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.mockito:mockito-junit-jupiter'
 }
 
 test { useJUnitPlatform() }
@@ -56,4 +57,8 @@ sourceSets {
 
 tasks.withType(JavaCompile) {
     options.generatedSourceOutputDirectory = file(querydslDir)
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
 }

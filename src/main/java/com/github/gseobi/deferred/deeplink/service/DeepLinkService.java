@@ -110,7 +110,11 @@ public class DeepLinkService {
         }
 
         // click 존재 확인
-        clickReferrerQueryRepository.findByCrypt(crypt).orElse(null);
+        ClickReferrer click = clickReferrerQueryRepository.findByCrypt(crypt).orElse(null);
+        if (click == null) {
+            model.put("invalid", true);
+            return model;
+        }
 
         AppConfig cfg = appConfigQueryRepository.findByProvider(provider).orElse(null);
         if (cfg == null) {
