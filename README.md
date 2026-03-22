@@ -1,5 +1,7 @@
 # deferred-deeplink-backend
 
+[![CI](https://github.com/Gseobi/deferred-deeplink-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/Gseobi/deferred-deeplink-backend/actions/workflows/ci.yml)
+
 Spring Boot + JPA + Querydsl을 기반으로,
 **광고 유입 이후 앱 설치 전/후가 분리되는 상황에서 deferred deeplink를 서버 중심으로 추적·검증하는 백엔드 프로젝트**입니다.
 

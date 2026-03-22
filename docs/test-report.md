@@ -49,9 +49,6 @@
 - `X-Forwarded-For` 우선 IP 추출
 - fallback `remoteAddr` 사용
 
-**Snapshot**
-![ClientUtilsTest](images/test-deeplink-clientutil.png)
-
 **Result**
 - 8개 테스트 모두 통과
 
@@ -66,9 +63,6 @@
 - encode → decode round-trip
 - 32바이트가 아닌 키 사용 시 예외
 - 잘못된 cipher format 복호화 시 예외
-
-**Snapshot**
-![AES256CipherTest](images/test-deeplink-aes256cipher.png)
 
 **Result**
 - 3개 테스트 모두 통과
@@ -88,9 +82,6 @@
 - landing 요청에서 정상 모델 기반 `landingPage` 렌더링
 - check 요청 JSON 응답 검증
 
-**Snapshot**
-![DeepLinkControllerTest](images/test-deeplink-controller.png)
-
 **Result**
 - 6개 테스트 모두 통과
 
@@ -109,9 +100,6 @@
 - app config 조회 실패 시 invalid 처리
 - 정상 최초 실행 검증 시 VERIFIED 응답 및 access log 저장
 - access log 미존재 시 NOT_MATCHED 응답
-
-**Snapshot**
-![DeepLinkServiceTest](images/test-deeplink-service.png)
 
 **Result**
 - 7개 테스트 모두 통과
@@ -143,9 +131,6 @@
 - 실패 0건
 - 성공률 100%
 
-**Snapshot**
-![Test Summary](images/test-summary-report.png)
-
 <br/>
 
 ## 5. Verification Summary
@@ -171,3 +156,11 @@
 - 본 자동화 테스트는 실제 광고 플랫폼 전체를 재현하기보다 핵심 서버 흐름 검증에 초점을 두었습니다.
 - 컨트롤러 테스트는 standalone MockMvc 기반으로 구성하여 웹 요청/응답 흐름을 검증했습니다.
 - 전체 애플리케이션 full-context 테스트보다 핵심 기능 테스트를 우선하는 방향으로 정리했습니다.
+
+## 7. Test Report Snapshot
+![Test Summary](images/test-summary-report.png)
+![ClientUtilsTest](images/test-deeplink-clientutil.png)
+![AES256CipherTest](images/test-deeplink-aes256cipher.png)
+![DeepLinkControllerTest](images/test-deeplink-controller.png)
+![DeepLinkServiceTest](images/test-deeplink-service.png)
+![GitHub Actions Pass](images/github-actions-pass.png)
