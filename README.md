@@ -2,164 +2,158 @@
 
 [![CI](https://github.com/Gseobi/deferred-deeplink-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/Gseobi/deferred-deeplink-backend/actions/workflows/ci.yml)
 
-Spring Boot + JPA + Querydsl을 기반으로,
-**광고 유입 이후 앱 설치 전/후가 분리되는 상황에서 deferred deeplink를 서버 중심으로 추적·검증하는 백엔드 프로젝트**입니다.
+광고 유입 이후 앱 설치 전/후가 분리되는 상황에서 **서버 기준 추적, 검증, 분기 처리**를 중심으로 deferred deeplink 흐름을 재구성한 Backend 프로젝트입니다.
 
-단순 딥링크 URL 생성이 아니라,
-광고 클릭 → 설치 유도 → 앱 최초 실행 검증까지의 흐름을
-서버 기준으로 일관되게 관리할 수 있도록 설계했습니다.
+---
 
-클라이언트 SDK나 외부 솔루션에 의존하지 않고,
-**DB Function + 암호화 토큰 + 접근 이력 기반 검증 로직**을 중심으로 구현했습니다.
+## 1. Overview
 
-<br/>
+이 프로젝트는 deferred deeplink를 단순 링크 생성 기능이 아니라 **서버 기준 검증과 상태 추적 문제**로 보고 설계한 프로젝트입니다.
 
-## 1. What Problem This Project Solves
+일반 딥링크와 달리 deferred deeplink는 광고 클릭 시점과 앱 최초 실행 시점이 분리되어 있기 때문에, 중간 상태를 어떻게 보존하고 최종 진입을 어떻게 검증할지가 중요합니다.
 
-일반 딥링크는 이미 앱이 설치된 사용자를 대상으로 목적지 이동을 처리하지만,
-deferred deeplink는 **앱이 없는 상태에서 링크를 클릭한 사용자의 설치 이후 흐름까지 연결**해야 합니다.
+이 프로젝트는 외부 SDK나 솔루션에 의존하기보다, **DB Function, 암호화 토큰, 접근 이력, 설치 상태 분기**를 통해 서버가 직접 흐름을 관리하도록 구성했습니다.
 
-이 과정에서는 다음 문제가 중요합니다.
+---
+
+## 2. Problem This Project Solves
+
+deferred deeplink는 단순히 URL을 발급한다고 해결되지 않습니다.
+
+실제 서비스에서는 아래와 같은 문제가 중요합니다.
 
 - 광고 클릭 시점 식별자 발급
 - 설치 전 상태 보존
 - 앱 최초 실행 시 위변조 방지
 - 다중 앱 또는 다중 광고 경로 분기
 - 접근 로그 및 운영 추적 가능성 확보
+- Client 상태를 그대로 신뢰하지 않는 검증 구조
 
-이 프로젝트는 위 흐름을 외부 SDK에 의존하지 않고,
-**서버가 직접 식별·검증·분기할 수 있는 구조**로 재구성한 포트폴리오 프로젝트입니다.
+이 프로젝트는 이러한 문제를 아래 흐름으로 해결합니다.
 
-<br/>
+- 광고 클릭 시 서버에서 Click ID 발급
+- 암호화된 `crypt` 토큰 생성 및 전달
+- landing 진입 시 접근 이력 생성
+- 최초 실행 시 `crypt + access_seq + user_pin` 검증
+- `app_type` 및 OS 기준 최종 분기 처리
 
-## 2. Verification Focus
+즉, 이 프로젝트는 딥링크 URL 생성보다 **서버 기준 식별, 검증, 상태 연결**을 우선하는 Backend 프로젝트입니다.
 
-이 프로젝트는 설치 전 유입 정보와 설치 후 앱 최초 실행 시점을
-서버 기준으로 안전하게 연결하는 검증 흐름에 초점을 두고 있습니다.
-
-- 광고 클릭 시점 식별자 발급 및 상태 저장
-- crypt 기반 전달값 보호 및 검증
-- access_seq 기반 접근 이력 추적
-- app_type / OS 기준 분기 처리
-- 비정상 요청 및 운영 관점 이슈 대응
-
-자세한 내용은 아래 문서에 정리했습니다.
-
-- [Test Report](docs/test-report.md)
-- [Troubleshooting Notes](docs/troubleshooting.md)
-- [Design Notes](docs/design-notes.md)
-
-<br/>
+---
 
 ## 3. Key Design Points
 
-### Deferred Deeplink Server Flow
-- 광고 링크 클릭 시 서버에서 Click ID 발급
-- Click 정보를 기반으로 암호화된 crypt 토큰 생성
-- 앱 설치 이후 최초 실행 시 crypt + access_seq + user_pin 조합으로 유입 사용자 검증
+### 1) DB Function 기반 Click ID 발급
 
-### DB Function-based Click ID Generation
-- Click ID는 애플리케이션이 아닌 DB Function에서 발급
-- 식별자 발급 책임을 DB 레벨로 분리
-- PostgreSQL / MySQL / Oracle 예제를 함께 정리
+Click ID를 애플리케이션 메모리에서 단순 생성하지 않고 DB Function 기준으로 발급하도록 구성했습니다.
 
-### app_type-based Multi-app Routing
-- `/install/{app_type}` 구조를 기준으로 앱별 진입 분리
-- app_type에 따라 스토어 URL, 앱 스킴, 랜딩 정보 분기
-- 하나의 백엔드에서 복수 앱 유입 처리 가능하도록 설계
+- 식별자 발급 책임을 DB 경계로 분리
+- 추적 흐름의 기준점을 Server 측에 고정
+- Click 데이터 lifecycle을 통제 가능한 구조로 정리
 
-### OS-based Access Control
-- User-Agent 기반으로 OS를 판별
-- 모바일(Android / iOS) 환경만 정상 처리 대상으로 허용
-- Windows / Mac 환경은 invalidRequest 페이지로 분기
+핵심은 식별자 생성 자체보다, **발급 책임을 어디에 둘 것인가**입니다.
 
-### JPA + Querydsl Responsibility Split
-- 저장 로직은 Spring Data JPA가 담당
-- 조회·검증 로직은 Querydsl 전용 QueryRepository로 분리
-- 조건 기반 조회와 검증 책임을 별도 계층에 집중
+### 2) 서버 기준 검증과 암호화 토큰 보호
 
-<br/>
+이 프로젝트는 Client가 전달하는 정보를 그대로 신뢰하지 않습니다.
 
-## 4. Supported Flow
+- `crypt` 기반 전달값 보호
+- 최초 실행 시 복호화 및 위변조 검증
+- 비정상 요청은 최종 분기 전에 차단
 
-### 1) 광고 링크 클릭
-- `GET /install/{app_type}`
-- 서버에서 Click ID 발급 및 crypt 생성
-- crypt를 포함한 랜딩 페이지로 Redirect
+즉, 검증 로직은 부가 기능이 아니라 프로젝트의 핵심 설계 요소입니다.
 
-### 2) 랜딩 페이지 진입
-- `GET /install/landing`
-- crypt 복호화 및 접근 로그(access_seq) 생성
-- 앱 실행 시도 후, 미설치 시 스토어 이동
+### 3) 설치 상태와 다중 앱 분기를 고려한 최종 진입 설계
 
-### 3) 앱 최초 실행 검증
-- `GET /install/check`
-- crypt + access_seq + user_pin 검증
-- deferred deeplink 유입 사용자 여부 확정
+최종 진입 경로는 단순 URL 하나로 결정되지 않습니다.
 
-<br/>
+- `app_type` 기준 앱별 분기
+- OS 기반 접근 제어
+- 설치 여부에 따른 landing / store / app 진입 처리
+- 하나의 Backend에서 복수 앱 유입 관리 가능
 
-## 5. Hybrid WebView Integration Context
+이 구조를 통해 deferred deeplink를 “링크 생성”이 아닌 **상태 기반 라우팅 문제**로 다뤘습니다.
 
-이 프로젝트는 앱 자체를 구현하는 목적의 프로젝트가 아니라,
-**하이브리드 WebView 환경에서 서버와 웹 페이지가 어떻게 연결되고 검증되는지**를
-백엔드 관점에서 정리한 프로젝트입니다.
+---
 
-실제 협업 경험을 반영하여 다음과 같은 요소를 함께 고려했습니다.
+## 4. Architecture / Flow
 
-- WebView 기반 랜딩 페이지 동작
-- JavaScript / Ajax 기반 데이터 전달 및 후속 처리
-- 앱 측 URL interception 흐름과의 연계
-- OS별 WebView 동작 차이에 따른 테스트 및 운영 대응
+### Flow Summary
 
-즉, Flutter 앱 구현 자체보다
-**서버 + WebView + 앱 연계 흐름의 검증 구조**를 중심으로 정리한 포트폴리오입니다.
+1. 사용자가 광고 링크를 클릭합니다.
+2. 서버가 Click ID를 발급하고 `crypt` 토큰을 생성합니다.
+3. landing 페이지로 이동하면서 접근 이력을 생성합니다.
+4. 앱 설치 또는 최초 실행 이후 `crypt`, `access_seq`, `user_pin` 조합을 검증합니다.
+5. 서버가 설치 상태와 요청 유효성을 확인합니다.
+6. `app_type` 및 OS 기준으로 최종 경로를 분기합니다.
+7. 사용자는 앱 또는 적절한 경로로 이동합니다.
 
-<br/>
+### High-Level Flow
 
-## 6. Package Structure
-
-```text
-com.github.gseobi.deferred.deeplink
-- config
-- QuerydslConfig.java
-- DbInitRunner.java
-- controller
-- DeepLinkController.java
-- domain
-- entity
-- AppConfig.java
-- ClickReferrer.java
-- AccessLog.java
-- enums
-- ClientOs.java
-- StoreType.java
-- repository
-- AppConfigRepository.java
-- ClickReferrerRepository.java
-- AccessLogRepository.java
-- query
-- AppConfigQueryRepository.java
-- AppConfigQueryRepositoryImpl.java
-- AppConfigQueryRepositoryBean.java
-- ClickReferrerQueryRepository.java
-- ClickReferrerQueryRepositoryImpl.java
-- ClickReferrerQueryRepositoryBean.java
-- AccessLogQueryRepository.java
-- AccessLogQueryRepositoryImpl.java
-- AccessLogQueryRepositoryBean.java
-- service
-- DeepLinkService.java
-- util
-- ClientUtils.java
-- AES256Cipher.java
-- JsonUtils.java
-- DeferredDeeplinkApplication.java
+```mermaid
+flowchart TD
+    A[Ad Click] --> B[Tracking API]
+    B --> C[Click ID Issuance]
+    C --> D[Crypt Token Generation]
+    D --> E[Landing]
+    E --> F[Access Log]
+    F --> G[Install / First Open]
+    G --> H[Token Verification]
+    H --> I{Installed / Valid State}
+    I -- Yes --> J[Resolve Deep Link]
+    I -- No --> K[Invalid or Fallback Path]
+    J --> L[Final Redirect]
+    K --> L
 ```
 
-<br/>
+### Main Flow Components
 
-## 7. Tech Stack
+- click tracking
+- `crypt` 생성 및 검증
+- access log 추적
+- `app_type` 기준 분기
+- OS 기반 요청 제어
+- 최종 redirect 결정
+
+### Main APIs
+
+- `GET /install/{app_type}`
+- `GET /install/landing`
+- `GET /install/check`
+
+---
+
+## 5. Why These Technologies
+
+### Spring Boot
+
+API, Validation, 서비스 계층 구성을 명확하게 가져가기 적합했습니다.  
+서버 기준 검증과 분기 흐름을 설명하기에도 무리가 적었습니다.
+
+### JPA + Querydsl
+
+저장과 조회 책임을 분리하기 위해 사용했습니다.
+
+- **JPA**: 저장 및 기본 영속 처리
+- **Querydsl**: 조건 기반 조회와 검증 로직 분리
+
+deferred deeplink는 상태 조건이 중요한 만큼, Querydsl을 통해 조회 의도를 분명하게 표현하고자 했습니다.
+
+### DB Function
+
+Click ID 발급 책임을 애플리케이션이 아니라 DB 경계에 두기 위해 선택했습니다.  
+식별자 발급 흐름을 통제 가능하게 만들고, DB 기준 추적 구조를 설명하는 데 적합했습니다.
+
+### AES256 기반 `crypt` 처리
+
+전달값 보호와 위변조 방지 관점에서 핵심 역할을 합니다.  
+Client가 전달한 값을 그대로 신뢰하지 않고, 서버가 복호화 및 검증을 수행하도록 했습니다.
+
+### JSP + JavaScript / Ajax
+
+이 프로젝트는 앱 자체 구현이 아니라 **서버 + WebView + landing 페이지 연계 흐름**을 설명하는 데 목적이 있어, landing / check 흐름을 보여주기 위한 형태로 구성했습니다.
+
+### Tech Stack
 
 - Java 17
 - Spring Boot 3.x
@@ -169,42 +163,63 @@ com.github.gseobi.deferred.deeplink
 - JavaScript / Ajax
 - Oracle / PostgreSQL / MySQL
 - Logback
+- Gradle
+- GitHub Actions
 
-<br/>
+---
 
-## 8. Automated Test Coverage
+## 6. Test / CI / Exception Handling
 
-이 프로젝트는 설계 문서 정리에 그치지 않고,  
-핵심 deferred deeplink 흐름에 대해 자동화 테스트를 구성했습니다.
+### Test Focus
 
-주요 테스트 범위는 다음과 같습니다.
+이 프로젝트는 다단계 deferred deeplink 흐름 검증에 집중합니다.
 
-- User-Agent 기반 OS 판별 및 클라이언트 IP 추출
+- User-Agent 기반 OS 판별
+- Client IP 추출
 - AES256 기반 `crypt` 암호화 / 복호화
-- install / landing / check 컨트롤러 흐름
-- `crypt` 생성 및 click 저장
+- install / landing / check Controller 흐름
+- `crypt` 생성 및 Click 저장
 - landing 모델 생성 및 invalid 분기
 - 최초 실행 검증 및 access log 처리
 
-전체 테스트는 로컬 환경에서 `./gradlew clean test` 기준 정상 통과했으며,  
-상세 항목과 실행 결과 스냅샷은 아래 문서에 정리했습니다.
+### CI
 
-- [Test Report](docs/test-report.md)
+- GitHub Actions 기반 build / test 자동화
+- 검증 로직, Controller 흐름, 암호화 처리에 대한 기본 회귀 확인 가능
 
-<br/>
+### Exception Handling
 
-## 9. Future Improvements
+- **Invalid Request**
+  - 잘못된 OS, 잘못된 파라미터, 비정상 접근은 조기 차단
+- **Token Validation Failure**
+  - 복호화 실패, 위변조, 유효하지 않은 요청은 최종 진입 전 차단
+- **State Mismatch**
+  - 설치 전/후 상태 또는 접근 이력 불일치 시 정상 흐름으로 처리하지 않음
+- **Routing Failure**
+  - `app_type` 또는 분기 기준이 올바르지 않으면 fallback 또는 invalid 처리
+- **Operational Tracking**
+  - access log 기준으로 추적 가능한 흐름 유지
+
+---
+
+## 7. Extensibility
+
+이 구조는 이후 운영 확장을 고려해 다음과 같은 방향으로 확장할 수 있습니다.
 
 - 토큰 만료 및 재사용 방지 정책 보강
-- Click / Access 추적 메트릭 강화
+- Click / Access 추적 metrics 강화
 - 다중 광고 채널 파라미터 추상화
 - 운영 로그 및 error response 구조 정리
 - WebView 연동 흐름 문서화 보강
-- 동일 Client 필터링
+- 동일 Client 필터링 강화
 
-<br/>
+핵심은 단순 링크 기능이 아니라, **장기적으로도 신뢰 가능한 유입 추적 구조를 만드는 것**입니다.
 
-## 10. Documents
+---
+
+## 8. Blog / Notes
+
+### Project Docs
 
 - [Design Notes](docs/design-notes.md)
 - [Test Report](docs/test-report.md)
