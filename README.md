@@ -4,7 +4,7 @@
 
 광고 유입 이후 앱 설치 전/후가 분리되는 상황에서 **서버 기준 추적, 검증, 분기 처리**를 중심으로 deferred deeplink 흐름을 재구성한 Backend 프로젝트입니다.
 
-</br>
+<br/>
 
 ## 1. Quick Proof
 
@@ -12,27 +12,25 @@
 - **Click ID 발급 + crypt 토큰 + access log** 구조로, 설치 전 상태를 보존하고 최초 실행 시 위변조 여부를 검증합니다.
 - 단순 링크 생성보다 **상태 추적, 요청 검증, 최종 분기 제어**를 Backend 책임으로 설계했습니다.
 
-</br>
+<br/>
 
 ## 2. Execution Evidence
 
-### Main Flow
+### Deferred Deeplink Flow Diagram
 
-```mermaid
-flowchart TD
-    A[Ad Click] --> B[Tracking API]
-    B --> C[Click ID Issuance]
-    C --> D[Crypt Token Generation]
-    D --> E[Landing]
-    E --> F[Access Log]
-    F --> G[Install / First Open]
-    G --> H[Token Verification]
-    H --> I{Installed / Valid State}
-    I -- Yes --> J[Resolve Deep Link]
-    I -- No --> K[Invalid or Fallback Path]
-    J --> L[Final Redirect]
-    K --> L
-```
+<div align="center">
+  <img src="docs/images/deferred-deeplink-flow.png" alt="Deferred Deeplink Flow" width="960" />
+</div>
+
+<div align="center">
+  <sub>
+    Source:
+    <a href="docs/diagram/deferred-deeplink-flow.drawio">draw.io</a> ·
+    <a href="docs/pdf/deferred-deeplink-flow.pdf">PDF</a>
+  </sub>
+</div>
+
+<br/>
 
 ### Example Request Flow
 
@@ -61,7 +59,7 @@ GET /install/check
 - Client 상태를 그대로 신뢰하지 않고, **서버가 click / access / token 기준으로 유효성을 판단**합니다.
 - 설치 전후가 끊기는 환경에서도 **최종 진입 경로를 통제 가능한 구조**로 설계했습니다.
 
-</br>
+<br/>
 
 ## 3. Problem & Design Goal
 
@@ -88,7 +86,7 @@ GET /install/check
 
 즉, 이 프로젝트는 딥링크 URL 생성보다 **서버 기준 식별, 검증, 상태 연결**을 우선하는 Backend 프로젝트입니다.
 
-</br>
+<br/>
 
 ## 4. Key Design
 
@@ -123,7 +121,7 @@ Click ID를 애플리케이션 메모리에서 단순 생성하지 않고 DB Fun
 
 이 구조를 통해 deferred deeplink를 “링크 생성”이 아닌 **상태 기반 라우팅 문제**로 다뤘습니다.
 
-</br>
+<br/>
 
 ## 5. Architecture / APIs
 
@@ -152,7 +150,7 @@ Click ID를 애플리케이션 메모리에서 단순 생성하지 않고 DB Fun
 - `GET /install/landing`
 - `GET /install/check`
 
-</br>
+<br/>
 
 ## 6. Why These Technologies
 
@@ -175,7 +173,7 @@ Click ID를 애플리케이션 메모리에서 단순 생성하지 않고 DB Fun
 - Gradle
 - GitHub Actions
 
-</br>
+<br/>
 
 ## 7. Test / Exception / Extensibility
 
@@ -208,7 +206,7 @@ Click ID를 애플리케이션 메모리에서 단순 생성하지 않고 DB Fun
 
 핵심은 단순 링크 기능이 아니라, **장기적으로도 신뢰 가능한 유입 추적 구조를 만드는 것**입니다.
 
-</br>
+<br/>
 
 ## 8. Notes / Blog
 
